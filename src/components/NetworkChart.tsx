@@ -12,6 +12,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
+import ChartSkeleton from "@/components/loading/ChartSkeleton";
 import {
 	Card,
 	CardContent,
@@ -801,12 +802,13 @@ export const NetworkChartClient = React.memo(function NetworkChart({
 							</ComposedChart>
 						</ChartContainer>
 						{showPeriodLoading && (
-							<div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-md backdrop-blur-[1px]">
-								<div className="flex size-9 items-center justify-center">
-									<div className="absolute inset-0 flex items-center justify-center">
-										<div className="size-4 rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/70 animate-spin" />
-									</div>
-								</div>
+							<div
+								role="status"
+								aria-label={t("serviceTracker.loading")}
+								aria-busy="true"
+								className="pointer-events-none absolute inset-0 z-20 rounded-md bg-card/90"
+							>
+								<ChartSkeleton />
 							</div>
 						)}
 					</div>

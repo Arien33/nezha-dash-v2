@@ -10,7 +10,9 @@
 	"scripts": {
 		"dev": "vite",
 		"dev:mock": "node scripts/dev-mock.js",
+		"dev:mock:guest": "node scripts/dev-mock.js --guest",
 		"mock:server": "node scripts/mock-nezha-server.js",
+		"mock:server:guest": "node scripts/mock-nezha-server.js --guest",
 		"typecheck": "tsc -b",
 		"build": "pnpm run typecheck && vite build",
 		"lint": "biome lint",

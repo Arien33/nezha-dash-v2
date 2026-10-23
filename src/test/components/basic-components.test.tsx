@@ -81,7 +81,7 @@ describe("basic display components", () => {
 		expect(
 			container.querySelector("[data-visible='true']"),
 		).toBeInTheDocument();
-		expect(container.querySelectorAll(".hamster-loading-bar")).toHaveLength(16);
+		expect(container.querySelectorAll(".hamster-loading-bar")).toHaveLength(8);
 		expect(container.querySelector(".animate-spin")).toBeInTheDocument();
 		expect(container.querySelector(".h-\\[250px\\]")).toBeInTheDocument();
 	});

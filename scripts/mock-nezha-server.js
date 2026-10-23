@@ -3,7 +3,8 @@ import { URL } from "node:url";
 import { WebSocket, WebSocketServer } from "ws";
 
 const port = Number(process.env.MOCK_NEZHA_PORT || 8008);
-const serverCount = Number(process.env.MOCK_NEZHA_COUNT || 3000);
+const serverCount = Number(process.env.MOCK_NEZHA_COUNT || 6);
+const isGuest = process.argv.includes("--guest");
 const updateIntervalMs = Number(
 	process.env.MOCK_NEZHA_INTERVAL_MS || (serverCount > 10_000 ? 0 : 2000),
 );
@@ -146,6 +147,113 @@ function jsonResponse(response, data, statusCode = 200) {
 	response.end(JSON.stringify(data));
 }
 
+// 与真实指标接口保持相同单位：百分比、字节、字节/秒、计数和毫秒时间戳。
+const metricSamplers = {
+	cpu: (_server, wave) => 10 + wave * 70,
+	memory: (server, wave) => server.host.mem_total * (0.25 + wave * 0.5),
+	swap: (server, wave) => server.host.swap_total * wave * 0.3,
+	disk: (server, wave) => server.host.disk_total * (0.3 + wave * 0.1),
+	net_in_speed: (_server, wave) => 2 ** 20 * (5 + wave * 25),
+	net_out_speed: (_server, wave) => 2 ** 20 * (2 + wave * 15),
+	net_in_transfer: (server, _wave, age) =>
+		Math.max(0, server.state.net_in_transfer - age * 1024),
+	net_out_transfer: (server, _wave, age) =>
+		Math.max(0, server.state.net_out_transfer - age * 1024),
+	load1: (_server, wave) => 0.2 + wave * 2,
+	load5: (_server, wave) => 0.3 + wave * 1.5,
+	load15: (_server, wave) => 0.4 + wave,
+	tcp_conn: (server, wave) =>
+		Math.round(server.state.tcp_conn_count + wave * 40),
+	udp_conn: (server, wave) =>
+		Math.round(server.state.udp_conn_count + wave * 10),
+	process_count: (server, wave) =>
+		Math.round(server.state.process_count + wave * 20),
+	temperature: (_server, wave) => 40 + wave * 20,
+	uptime: (server, _wave, age) => Math.max(0, server.state.uptime - age),
+	gpu: (server, wave) => (server.host.gpu.length > 0 ? 10 + wave * 60 : 0),
+};
+const metricPeriods = {
+	"1d": { days: 1, stepMs: 15 * minuteMs },
+	"7d": { days: 7, stepMs: 60 * minuteMs },
+	"30d": { days: 30, stepMs: 6 * 60 * minuteMs },
+};
+
+function createMetricHistory(server, metric, period) {
+	const { days, stepMs } = metricPeriods[period];
+	// 同一窗口对齐到固定采样时间，内存/交换、上传/下载等成对序列才能匹配。
+	const windowEnd = Math.floor(Date.now() / stepMs) * stepMs;
+	const windowStart = windowEnd - days * dayMs;
+	const lastActive = Date.parse(server.last_active);
+	const dataPoints = [];
+	for (
+		let ts = windowStart;
+		ts <= windowEnd && ts <= lastActive;
+		ts += stepMs
+	) {
+		const wave = (Math.sin(ts / (60 * minuteMs) + server.id) + 1) / 2;
+		const age = (windowEnd - ts) / 1000;
+		dataPoints.push({
+			ts,
+			value: Number(metricSamplers[metric](server, wave, age).toFixed(2)),
+		});
+	}
+	return {
+		server_id: server.id,
+		server_name: server.name,
+		metric,
+		data_points: dataPoints,
+	};
+}
+
+function createMonitorHistory(server, period) {
+	const { days, stepMs } = metricPeriods[period];
+	const end = Math.floor(Date.now() / stepMs) * stepMs;
+	const timestamps = [];
+	for (
+		let ts = end - days * dayMs;
+		ts <= end && ts <= Date.parse(server.last_active);
+		ts += stepMs
+	) {
+		timestamps.push(ts);
+	}
+	return ["Hong Kong · ICMP", "Tokyo · TCP", "Singapore · HTTPS"].map(
+		(name, index) => {
+			const loss = timestamps.map((ts) => {
+				const sample = Math.floor(ts / stepMs) + server.id + index * 7;
+				return index === 0
+					? 0
+					: sample % 43 === 0
+						? 100
+						: sample % 11 === 0
+							? 5 + index * 3
+							: 0;
+			});
+			return {
+				monitor_id: index + 1,
+				monitor_name: name,
+				display_index: 3 - index,
+				server_id: server.id,
+				server_name: server.name,
+				created_at: timestamps,
+				avg_delay: timestamps.map((ts, sample) =>
+					loss[sample] === 100
+						? 0
+						: Number(
+								(
+									25 +
+									index * 40 +
+									(Math.sin(ts / (60 * minuteMs) + server.id + index) + 1) *
+										(6 + index * 8) +
+									loss[sample] * 3
+								).toFixed(2),
+							),
+				),
+				packet_loss: loss,
+			};
+		},
+	);
+}
+
 function createOnlineHistory(server, days) {
 	const windowEnd = Math.floor(Date.now() / 1000) * 1000;
 	const windowStart = windowEnd - days * dayMs;
@@ -217,7 +325,7 @@ function createOnlineHistory(server, days) {
 		server_id: server.id,
 		server_name: server.name,
 		days,
-		max_days: 30,
+		max_days: isGuest ? 1 : 30,
 		timezone: "Asia/Shanghai",
 		window_start: new Date(windowStart).toISOString(),
 		window_end: new Date(windowEnd).toISOString(),
@@ -308,12 +416,74 @@ const httpServer = http.createServer((request, response) => {
 		return;
 	}
 
+	if (
+		isGuest &&
+		["/api/v1/profile", "/api/v1/refresh-token"].includes(requestUrl.pathname)
+	) {
+		jsonResponse(response, { success: false, error: "unauthorized" }, 401);
+		return;
+	}
+
+	if (
+		isGuest &&
+		/^\/api\/v1\/server\/\d+\/(metrics|service)$/.test(requestUrl.pathname) &&
+		(requestUrl.searchParams.get("period") ?? "1d") !== "1d"
+	) {
+		jsonResponse(
+			response,
+			{
+				success: false,
+				error: "unauthorized: only 1d data available for guests",
+			},
+			401,
+		);
+		return;
+	}
+
+	const metricsMatch = requestUrl.pathname.match(
+		/^\/api\/v1\/server\/(\d+)\/(metrics|service)$/,
+	);
+	if (metricsMatch) {
+		const server = servers[Number(metricsMatch[1]) - 1];
+		const metric = requestUrl.searchParams.get("metric") ?? "cpu";
+		const period = requestUrl.searchParams.get("period") ?? "1d";
+		if (!server) {
+			jsonResponse(
+				response,
+				{ success: false, error: "server not found" },
+				404,
+			);
+			return;
+		}
+		if (
+			!Object.hasOwn(metricSamplers, metric) ||
+			!Object.hasOwn(metricPeriods, period)
+		) {
+			jsonResponse(
+				response,
+				{ success: false, error: "invalid metric or period" },
+				400,
+			);
+			return;
+		}
+		jsonResponse(response, {
+			success: true,
+			data:
+				metricsMatch[2] === "service"
+					? createMonitorHistory(server, period)
+					: createMetricHistory(server, metric, period),
+		});
+		return;
+	}
+
 	const onlineHistoryMatch = requestUrl.pathname.match(
 		/^\/api\/v1\/server\/(\d+)\/online-history$/,
 	);
 	if (onlineHistoryMatch) {
 		const server = servers[Number(onlineHistoryMatch[1]) - 1];
-		const days = Number(requestUrl.searchParams.get("days") ?? 7);
+		const days = Number(
+			requestUrl.searchParams.get("days") ?? (isGuest ? 1 : 7),
+		);
 		if (!server) {
 			jsonResponse(
 				response,
@@ -327,6 +497,17 @@ const httpServer = http.createServer((request, response) => {
 				response,
 				{ success: false, error: "days must be an integer between 1 and 30" },
 				400,
+			);
+			return;
+		}
+		if (isGuest && days > 1) {
+			jsonResponse(
+				response,
+				{
+					success: false,
+					error: "unauthorized: only 1d data available for guests",
+				},
+				401,
 			);
 			return;
 		}
@@ -414,8 +595,9 @@ if (updateIntervalMs > 0) {
 
 httpServer.listen(port, () => {
 	console.log(
-		`Mock Nezha API listening on http://localhost:${port} with ${serverCount} servers`,
+		`Mock Nezha API listening on http://localhost:${httpServer.address().port} with ${serverCount} servers`,
 	);
+	console.log(`Mock Nezha auth mode: ${isGuest ? "guest" : "user"}`);
 	if (updateIntervalMs === 0) {
 		console.log(
 			"Mock Nezha websocket is in static mode. Set MOCK_NEZHA_INTERVAL_MS to enable repeated full-payload updates.",
