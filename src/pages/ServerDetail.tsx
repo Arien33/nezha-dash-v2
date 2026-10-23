@@ -6,9 +6,12 @@ import NetworkChartLoading from "@/components/NetworkChartLoading";
 import ServerDetailOverview from "@/components/ServerDetailOverview";
 import TabSwitch from "@/components/TabSwitch";
 import { Separator } from "@/components/ui/separator";
-import { loadServerDetailChart } from "@/lib/server-detail-preload";
+import {
+	getPreloadedServerDetailChart,
+	loadServerDetailChart,
+} from "@/lib/server-detail-preload";
 
-const ServerDetailChart = lazy(loadServerDetailChart);
+const LazyServerDetailChart = lazy(loadServerDetailChart);
 
 const NetworkChart = lazy(() =>
 	import("@/components/NetworkChart").then((module) => ({
@@ -23,6 +26,9 @@ const ServerDetailOnlineHistory = lazy(() =>
 );
 
 export default function ServerDetail() {
+	const [ServerDetailChart] = useState(
+		() => getPreloadedServerDetailChart() ?? LazyServerDetailChart,
+	);
 	useEffect(() => {
 		window.scrollTo({ top: 0, left: 0, behavior: "instant" });
 	}, []);

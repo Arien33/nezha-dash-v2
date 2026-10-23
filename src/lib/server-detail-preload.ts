@@ -1,3 +1,11 @@
+let loadedDetail: typeof import("@/pages/ServerDetail").default | undefined;
+let loadedChart:
+	| typeof import("@/components/ServerDetailChart").default
+	| undefined;
+
+export const getPreloadedServerDetail = () => loadedDetail;
+export const getPreloadedServerDetailChart = () => loadedChart;
+
 let detailModule: Promise<typeof import("@/pages/ServerDetail")> | undefined;
 let chartModule:
 	| Promise<typeof import("@/components/ServerDetailChart")>
@@ -5,20 +13,30 @@ let chartModule:
 
 export function loadServerDetail() {
 	if (!detailModule) {
-		detailModule = import("@/pages/ServerDetail").catch((error) => {
-			detailModule = undefined;
-			throw error;
-		});
+		detailModule = import("@/pages/ServerDetail")
+			.then((module) => {
+				loadedDetail = module.default;
+				return module;
+			})
+			.catch((error) => {
+				detailModule = undefined;
+				throw error;
+			});
 	}
 	return detailModule;
 }
 
 export function loadServerDetailChart() {
 	if (!chartModule) {
-		chartModule = import("@/components/ServerDetailChart").catch((error) => {
-			chartModule = undefined;
-			throw error;
-		});
+		chartModule = import("@/components/ServerDetailChart")
+			.then((module) => {
+				loadedChart = module.default;
+				return module;
+			})
+			.catch((error) => {
+				chartModule = undefined;
+				throw error;
+			});
 	}
 	return chartModule;
 }

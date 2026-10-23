@@ -15,6 +15,7 @@ import { InjectContext } from "./lib/inject";
 import { fetchSetting } from "./lib/nezha-api";
 import { refreshRuntimeConfig, useRuntimeConfig } from "./lib/runtime-config";
 import {
+	getPreloadedServerDetail,
 	loadServerDetail,
 	preloadServerDetail,
 } from "./lib/server-detail-preload";
@@ -23,7 +24,14 @@ import ErrorPage from "./pages/ErrorPage";
 import Server from "./pages/Server";
 
 const NotFound = lazy(() => import("./pages/NotFound"));
-const ServerDetail = lazy(loadServerDetail);
+const LazyServerDetail = lazy(loadServerDetail);
+function ServerDetail() {
+	// 已完成预加载时直接渲染，避免 lazy 首次读取已兑现 Promise 仍短暂挂起。
+	const [Component] = useState(
+		() => getPreloadedServerDetail() ?? LazyServerDetail,
+	);
+	return <Component />;
+}
 
 // Route checker component
 const RouteChecker: React.FC = () => {

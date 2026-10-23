@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { loadServerDetailChart } from "@/lib/server-detail-preload";
 import ErrorPage from "@/pages/ErrorPage";
 import NotFound from "@/pages/NotFound";
 import ServerDetail from "@/pages/ServerDetail";
@@ -93,6 +94,20 @@ describe("simple pages", () => {
 });
 
 describe("ServerDetail", () => {
+	it("renders preloaded charts immediately with the overview", async () => {
+		await loadServerDetailChart();
+		render(
+			<MemoryRouter initialEntries={["/server/7"]}>
+				<Routes>
+					<Route path="/server/:id" element={<ServerDetail />} />
+				</Routes>
+			</MemoryRouter>,
+		);
+		expect(screen.getByTestId("detail-chart")).toHaveTextContent("7");
+		expect(screen.getByTestId("detail-overview")).toHaveTextContent("7");
+		expect(screen.queryByRole("status")).not.toBeInTheDocument();
+	});
+
 	beforeEach(() => {
 		vi.stubGlobal("scrollTo", vi.fn());
 	});

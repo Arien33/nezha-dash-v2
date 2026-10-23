@@ -1,7 +1,15 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
+import { Link } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
+import { loadServerDetail } from "@/lib/server-detail-preload";
 import { createTestQueryClient } from "@/test/utils";
 
 const appMocks = vi.hoisted(() => ({
@@ -29,6 +37,7 @@ vi.mock("../pages/Server", () => ({
 	default: ({ backendError }: { backendError?: Error | null }) => (
 		<div>
 			<div>server-page</div>
+			<Link to="/server/6">open-detail</Link>
 			{backendError && <p>{backendError.message}</p>}
 		</div>
 	),
@@ -89,6 +98,17 @@ function renderApp(route = "/") {
 }
 
 describe("App", () => {
+	it("renders an already preloaded detail route synchronously without a fallback flash", async () => {
+		renderApp("/");
+		await screen.findByText("server-page");
+		await loadServerDetail();
+		fireEvent.click(screen.getByText("open-detail"));
+		expect(screen.getByText("server-detail-page")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("status", { name: "serviceTracker.loading" }),
+		).not.toBeInTheDocument();
+	});
+
 	it("shows the detail skeleton instead of an empty route while detail content is loading", async () => {
 		let release = () => {};
 		appMocks.detailGate = new Promise<void>((resolve) => {
