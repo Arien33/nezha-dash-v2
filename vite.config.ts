@@ -1,5 +1,4 @@
 import { execSync } from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
@@ -53,10 +52,6 @@ export default defineConfig({
 		},
 	},
 	server: {
-		https: {
-			key: fs.readFileSync("./.cert/key.pem"),
-			cert: fs.readFileSync("./.cert/cert.pem"),
-		},
 		proxy: {
 			"/api/v1/ws/server": {
 				target: "ws://localhost:8008",
