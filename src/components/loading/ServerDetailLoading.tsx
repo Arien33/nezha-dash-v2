@@ -59,3 +59,17 @@ export function ServerDetailLoading() {
 		</div>
 	);
 }
+
+export function ServerDetailPageLoading() {
+	return (
+		<div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-0 server-info">
+			<ServerDetailLoading />
+			<div aria-hidden="true" className="my-2 flex h-10 items-center gap-3">
+				<div className="h-px flex-1 bg-border" />
+				<Bar className="h-10 w-48 rounded-full" />
+				<div className="h-px flex-1 bg-border" />
+			</div>
+			<ServerDetailChartLoading />
+		</div>
+	);
+}

@@ -9,6 +9,7 @@ const appMocks = vi.hoisted(() => ({
 	fetchSetting: vi.fn(),
 	injectContext: vi.fn(),
 	setTheme: vi.fn(),
+	detailGate: null as Promise<void> | null,
 }));
 
 vi.mock("../components/DashCommand", () => ({
@@ -34,7 +35,10 @@ vi.mock("../pages/Server", () => ({
 }));
 
 vi.mock("../pages/ServerDetail", () => ({
-	default: () => <div>server-detail-page</div>,
+	default: () => {
+		if (appMocks.detailGate) throw appMocks.detailGate;
+		return <div>server-detail-page</div>;
+	},
 }));
 
 vi.mock("../hooks/use-background", () => ({
@@ -85,8 +89,30 @@ function renderApp(route = "/") {
 }
 
 describe("App", () => {
+	it("shows the detail skeleton instead of an empty route while detail content is loading", async () => {
+		let release = () => {};
+		appMocks.detailGate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		renderApp("/server/6");
+		expect(
+			await screen.findByRole("status", { name: "serviceTracker.loading" }),
+		).toBeInTheDocument();
+		expect(screen.getByText("header")).toBeInTheDocument();
+		expect(screen.queryByText("server-detail-page")).not.toBeInTheDocument();
+		await act(async () => {
+			appMocks.detailGate = null;
+			release();
+		});
+		expect(await screen.findByText("server-detail-page")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("status", { name: "serviceTracker.loading" }),
+		).not.toBeInTheDocument();
+	});
+
 	beforeEach(() => {
 		appMocks.backgroundImage = undefined;
+		appMocks.detailGate = null;
 		appMocks.fetchSetting.mockResolvedValue(settingResponse());
 		appMocks.injectContext.mockResolvedValue(undefined);
 	});

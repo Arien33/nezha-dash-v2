@@ -1,11 +1,14 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import OnlineHistorySkeleton from "@/components/loading/OnlineHistorySkeleton";
+import { ServerDetailChartLoading } from "@/components/loading/ServerDetailLoading";
 import NetworkChartLoading from "@/components/NetworkChartLoading";
-import ServerDetailChart from "@/components/ServerDetailChart";
 import ServerDetailOverview from "@/components/ServerDetailOverview";
 import TabSwitch from "@/components/TabSwitch";
 import { Separator } from "@/components/ui/separator";
+import { loadServerDetailChart } from "@/lib/server-detail-preload";
+
+const ServerDetailChart = lazy(loadServerDetailChart);
 
 const NetworkChart = lazy(() =>
 	import("@/components/NetworkChart").then((module) => ({
@@ -52,7 +55,11 @@ export default function ServerDetail() {
 				<ServerDetailSummary server_id={Number(server_id)} />
 			</section> */}
 
-			{currentTab === tabs[0] && <ServerDetailChart server_id={server_id} />}
+			{currentTab === tabs[0] && (
+				<Suspense fallback={<ServerDetailChartLoading />}>
+					<ServerDetailChart server_id={server_id} />
+				</Suspense>
+			)}
 			{currentTab === tabs[1] && (
 				<Suspense fallback={<NetworkChartLoading />}>
 					<NetworkChart server_id={Number(server_id)} show={true} />

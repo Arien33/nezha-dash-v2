@@ -10,6 +10,7 @@ import {
 	MageMicrosoftWindows,
 } from "@/lib/logo-class";
 import { saveMainPageScrollPosition } from "@/lib/navigation";
+import { preloadServerDetail } from "@/lib/server-detail-preload";
 import { cn, formatNezhaInfo, parsePublicNote } from "@/lib/utils";
 import type { NezhaServer } from "@/types/nezha-api";
 import BillingInfo from "./billingInfo";
@@ -66,6 +67,9 @@ function ServerCardInline({
 					},
 				)}
 				onClick={cardClick}
+				onPointerEnter={preloadServerDetail}
+				onPointerDown={preloadServerDetail}
+				onFocus={preloadServerDetail}
 			>
 				<section
 					className={cn("grid items-center gap-2 lg:w-36")}
@@ -207,6 +211,9 @@ function ServerCardInline({
 				},
 			)}
 			onClick={cardClick}
+			onPointerEnter={preloadServerDetail}
+			onPointerDown={preloadServerDetail}
+			onFocus={preloadServerDetail}
 		>
 			<section
 				className={cn("grid items-center gap-2 w-40")}

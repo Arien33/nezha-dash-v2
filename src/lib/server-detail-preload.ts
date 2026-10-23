@@ -1,0 +1,31 @@
+let detailModule: Promise<typeof import("@/pages/ServerDetail")> | undefined;
+let chartModule:
+	| Promise<typeof import("@/components/ServerDetailChart")>
+	| undefined;
+
+export function loadServerDetail() {
+	if (!detailModule) {
+		detailModule = import("@/pages/ServerDetail").catch((error) => {
+			detailModule = undefined;
+			throw error;
+		});
+	}
+	return detailModule;
+}
+
+export function loadServerDetailChart() {
+	if (!chartModule) {
+		chartModule = import("@/components/ServerDetailChart").catch((error) => {
+			chartModule = undefined;
+			throw error;
+		});
+	}
+	return chartModule;
+}
+
+export function preloadServerDetail() {
+	// 页面与图表并行下载；预加载失败不阻断导航，实际进入时仍可重试。
+	void Promise.all([loadServerDetail(), loadServerDetailChart()]).catch(
+		() => undefined,
+	);
+}

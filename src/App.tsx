@@ -8,17 +8,21 @@ import { DashCommand } from "./components/DashCommand";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Footer from "./components/Footer";
 import Header, { RefreshToast } from "./components/Header";
+import { ServerDetailPageLoading } from "./components/loading/ServerDetailLoading";
 import { useBackground } from "./hooks/use-background";
 import { useTheme } from "./hooks/use-theme";
 import { InjectContext } from "./lib/inject";
 import { fetchSetting } from "./lib/nezha-api";
 import { refreshRuntimeConfig, useRuntimeConfig } from "./lib/runtime-config";
+import {
+	loadServerDetail,
+	preloadServerDetail,
+} from "./lib/server-detail-preload";
 import { cn } from "./lib/utils";
 import ErrorPage from "./pages/ErrorPage";
 import Server from "./pages/Server";
 
 const NotFound = lazy(() => import("./pages/NotFound"));
-const loadServerDetail = () => import("./pages/ServerDetail");
 const ServerDetail = lazy(loadServerDetail);
 
 // Route checker component
@@ -53,7 +57,7 @@ const MainApp: React.FC = () => {
 
 	useEffect(() => {
 		// Preloading is optional; lazy routing retains its normal error boundary.
-		void loadServerDetail().catch(() => undefined);
+		preloadServerDetail();
 	}, []);
 
 	useEffect(() => {
@@ -163,7 +167,7 @@ const MainApp: React.FC = () => {
 						<Route
 							path="/server/:id"
 							element={
-								<Suspense fallback={null}>
+								<Suspense fallback={<ServerDetailPageLoading />}>
 									<ServerDetail />
 								</Suspense>
 							}
