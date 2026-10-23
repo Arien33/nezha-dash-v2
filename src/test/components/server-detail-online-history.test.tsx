@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import dayjs from "dayjs";
 import type { ReactElement } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ServerDetailOnlineHistory from "@/components/ServerDetailOnlineHistory";
 import { createTestQueryClient } from "@/test/utils";
 import type { OnlineHistoryResponse } from "@/types/nezha-api";
@@ -17,10 +17,12 @@ vi.mock("@/hooks/use-websocket-context", () => ({
 
 const apiMocks = vi.hoisted(() => ({
 	fetchServerOnlineHistory: vi.fn(),
+	fetchLoginUser: vi.fn(),
 }));
 
 vi.mock("@/lib/nezha-api", () => ({
 	fetchServerOnlineHistory: apiMocks.fetchServerOnlineHistory,
+	fetchLoginUser: apiMocks.fetchLoginUser,
 }));
 
 function onlineHistoryResponse(maxDays = 30): OnlineHistoryResponse {
@@ -69,7 +71,52 @@ function renderWithQuery(ui: ReactElement) {
 describe("ServerDetailOnlineHistory", () => {
 	beforeEach(() => {
 		websocketMocks.lastData = null;
+		Object.defineProperty(document, "cookie", {
+			configurable: true,
+			value: "nz-csrf=test",
+		});
+		apiMocks.fetchLoginUser.mockReset();
+		apiMocks.fetchLoginUser.mockResolvedValue({
+			success: true,
+			data: { id: 1 },
+		});
 		apiMocks.fetchServerOnlineHistory.mockReset();
+	});
+
+	afterEach(() => {
+		Object.defineProperty(document, "cookie", {
+			configurable: true,
+			value: "",
+		});
+	});
+
+	it.each([
+		"guest",
+		"pending",
+		"no-cookie",
+	])("locks longer windows for %s sessions before any rejected history request", async (session) => {
+		if (session === "guest")
+			apiMocks.fetchLoginUser.mockRejectedValue(new Error("unauthorized"));
+		if (session === "pending")
+			apiMocks.fetchLoginUser.mockReturnValue(new Promise(() => undefined));
+		if (session === "no-cookie")
+			Object.defineProperty(document, "cookie", {
+				configurable: true,
+				value: "",
+			});
+		apiMocks.fetchServerOnlineHistory.mockResolvedValue(
+			onlineHistoryResponse(),
+		);
+		renderWithQuery(<ServerDetailOnlineHistory server_id="7" />);
+		await screen.findByText("serverOnlineHistory.dailyOnline");
+		const user = userEvent.setup();
+		for (const days of [7, 30]) {
+			const option = screen.getByText(`serverOnlineHistory.days${days}`);
+			expect(option.parentElement).toHaveAttribute("aria-disabled", "true");
+			await user.click(option);
+		}
+		expect(apiMocks.fetchServerOnlineHistory).toHaveBeenCalledTimes(1);
+		expect(apiMocks.fetchServerOnlineHistory).toHaveBeenCalledWith(7, 1);
 	});
 
 	it("renders the loading state while history data is unavailable", () => {

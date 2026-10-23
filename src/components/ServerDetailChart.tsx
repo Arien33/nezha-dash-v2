@@ -24,13 +24,10 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useActiveIndicator } from "@/hooks/use-active-indicator";
+import { useLoginUser } from "@/hooks/use-login-user";
 import { useWebSocketContext } from "@/hooks/use-websocket-context";
 import { formatBytes } from "@/lib/format";
-import {
-	fetchLoginUser,
-	fetchServerMetrics,
-	fetchSetting,
-} from "@/lib/nezha-api";
+import { fetchServerMetrics, fetchSetting } from "@/lib/nezha-api";
 import {
 	cn,
 	formatNezhaInfo,
@@ -215,15 +212,7 @@ export default function ServerDetailChart({
 	const [selectedPeriod, setSelectedPeriod] = useState<ChartPeriod>("realtime");
 
 	// Check if user is logged in
-	const { data: userData, isError: isLoginError } = useQuery({
-		queryKey: ["login-user"],
-		queryFn: () => fetchLoginUser(),
-		refetchOnMount: false,
-		refetchOnWindowFocus: true,
-		refetchIntervalInBackground: true,
-		refetchInterval: 1000 * 30,
-		retry: 0,
-	});
+	const { data: userData, isError: isLoginError } = useLoginUser();
 	const isLogin = isLoginError
 		? false
 		: userData

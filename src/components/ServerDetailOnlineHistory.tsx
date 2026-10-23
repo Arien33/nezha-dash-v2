@@ -11,6 +11,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useActiveIndicator } from "@/hooks/use-active-indicator";
+import { useLoginUser } from "@/hooks/use-login-user";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useWebSocketContext } from "@/hooks/use-websocket-context";
 import { fetchServerOnlineHistory } from "@/lib/nezha-api";
@@ -150,6 +151,7 @@ function DaysSelector({
 				return (
 					<div
 						key={days}
+						aria-disabled={isLocked}
 						ref={setItemRef(index)}
 						onClick={() => {
 							if (!isLocked) {
@@ -245,6 +247,8 @@ export default function ServerDetailOnlineHistory({
 }) {
 	const { t } = useTranslation();
 	const { lastData } = useWebSocketContext();
+	const { data: userData, isError: isLoginError } = useLoginUser();
+	const isLogin = !isLoginError && !!userData?.data?.id && !!document.cookie;
 	const [days, setDays] = useState(DAY_OPTIONS[0]);
 	const [guestMaxDays, setGuestMaxDays] = useState<number | null>(null);
 	const [periodMode, setPeriodMode] = useState<PeriodMode>("online");
@@ -252,15 +256,20 @@ export default function ServerDetailOnlineHistory({
 	// 桌面为四列，手机为两行指标，两端统一使用在线率进度条。
 	const isDesktop = useMediaQuery("(min-width: 768px)");
 
+	const requestDays = isLogin && guestMaxDays !== 1 ? days : 1;
+	useEffect(() => {
+		if (!isLogin) setDays(1);
+	}, [isLogin]);
+
 	const {
 		data: historyData,
 		isError,
 		isPending,
 		error: queryError,
 	} = useQuery({
-		queryKey: ["online-history", server_id, days],
-		queryFn: () => fetchServerOnlineHistory(Number(server_id), days),
-		placeholderData: keepPreviousData,
+		queryKey: ["online-history", server_id, requestDays],
+		queryFn: () => fetchServerOnlineHistory(Number(server_id), requestDays),
+		placeholderData: isLogin ? keepPreviousData : undefined,
 		refetchOnMount: true,
 		refetchOnWindowFocus: true,
 		refetchInterval: 60000,
@@ -361,8 +370,10 @@ export default function ServerDetailOnlineHistory({
 					</span>
 				)}
 				<DaysSelector
-					selectedDays={days}
-					maxDays={guestMaxDays ?? online?.max_days ?? DAY_OPTIONS[2]}
+					selectedDays={requestDays}
+					maxDays={
+						isLogin ? (guestMaxDays ?? online?.max_days ?? DAY_OPTIONS[2]) : 1
+					}
 					onDaysChange={(nextDays) => {
 						setDays(nextDays);
 						setVisibleDays(PERIODS_INITIAL_DAYS);

@@ -8,8 +8,9 @@ import { ModeToggle } from "@/components/ThemeSwitcher";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBackground } from "@/hooks/use-background";
+import { useLoginUser } from "@/hooks/use-login-user";
 import { useWebSocketContext } from "@/hooks/use-websocket-context";
-import { fetchLoginUser, fetchSetting } from "@/lib/nezha-api";
+import { fetchSetting } from "@/lib/nezha-api";
 import { cn } from "@/lib/utils";
 
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -290,15 +291,7 @@ function DashboardLink() {
 		isLoadingError,
 		isError,
 		refetch,
-	} = useQuery({
-		queryKey: ["login-user"],
-		queryFn: () => fetchLoginUser(),
-		refetchOnMount: false,
-		refetchOnWindowFocus: true,
-		refetchIntervalInBackground: true,
-		refetchInterval: 1000 * 30,
-		retry: 0,
-	});
+	} = useLoginUser();
 
 	const isLogin = isError
 		? false

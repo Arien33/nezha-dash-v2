@@ -34,11 +34,8 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useActiveIndicator } from "@/hooks/use-active-indicator";
-import {
-	fetchLoginUser,
-	fetchMonitor,
-	type MonitorPeriod,
-} from "@/lib/nezha-api";
+import { useLoginUser } from "@/hooks/use-login-user";
+import { fetchMonitor, type MonitorPeriod } from "@/lib/nezha-api";
 import { cn, formatTime } from "@/lib/utils";
 import type { NezhaMonitor, ServerMonitorChart } from "@/types/nezha-api";
 import NetworkChartLoading from "./NetworkChartLoading";
@@ -128,15 +125,7 @@ export function NetworkChart({
 }) {
 	const { t } = useTranslation();
 	const [period, setPeriod] = React.useState<MonitorPeriod>("1d");
-	const { data: userData, isError: isLoginError } = useQuery({
-		queryKey: ["login-user"],
-		queryFn: () => fetchLoginUser(),
-		refetchOnMount: false,
-		refetchOnWindowFocus: true,
-		refetchIntervalInBackground: true,
-		refetchInterval: 1000 * 30,
-		retry: 0,
-	});
+	const { data: userData, isError: isLoginError } = useLoginUser();
 	const isLogin = isLoginError
 		? false
 		: userData
