@@ -32,8 +32,13 @@ import ErrorPage from "./pages/ErrorPage";
 import Server from "./pages/Server";
 
 const loadNotFound = () => import("./pages/NotFound");
-function ServerDetail() {
+function ServerDetail({
+	configurationLoading,
+}: {
+	configurationLoading: boolean;
+}) {
 	const { t } = useTranslation();
+	if (configurationLoading) return <ServerDetailPageLoading />;
 	// 已完成预加载时直接渲染，避免 lazy 首次读取已兑现 Promise 仍短暂挂起。
 	return (
 		<RetryableLazy
@@ -58,7 +63,11 @@ const toError = (error: unknown) => {
 
 const MainApp: React.FC = () => {
 	const { pathname } = useLocation();
-	const { data: settingData, error } = useQuery({
+	const {
+		data: settingData,
+		error,
+		isPending: settingsPending,
+	} = useQuery({
 		queryKey: ["setting"],
 		queryFn: () => fetchSetting(),
 		refetchOnMount: true,
@@ -72,7 +81,7 @@ const MainApp: React.FC = () => {
 		code: string;
 		status: "loading" | "ready" | "error";
 		error?: Error;
-	}>({ code: "", status: "ready" });
+	}>({ code: "", status: "loading" });
 	const { forceTheme, mobileBackgroundImage: customMobileBackgroundImage } =
 		useRuntimeConfig();
 	const { backgroundImage: customBackgroundImage } = useBackground();
@@ -83,6 +92,7 @@ const MainApp: React.FC = () => {
 	}, []);
 
 	useEffect(() => {
+		if (settingsPending) return;
 		const controller = new AbortController();
 		let cleanup: (() => void) | undefined;
 		setInitialization({ code: customCode, status: "loading" });
@@ -114,7 +124,7 @@ const MainApp: React.FC = () => {
 			controller.abort();
 			cleanup?.();
 		};
-	}, [customCode]);
+	}, [customCode, settingsPending]);
 
 	const language = settingData?.data?.config?.language;
 	useEffect(() => {
@@ -133,12 +143,10 @@ const MainApp: React.FC = () => {
 
 	const initialBackendError = !settingData ? toError(error) : null;
 
-	if (
+	const configurationLoading =
+		settingsPending ||
 		initialization.code !== customCode ||
-		initialization.status === "loading"
-	) {
-		return <div role="status">Loading dashboard configuration…</div>;
-	}
+		initialization.status === "loading";
 
 	return (
 		<ErrorBoundary>
@@ -168,21 +176,31 @@ const MainApp: React.FC = () => {
 				/>
 			)}
 			<div
-				className={cn("flex min-h-screen w-full flex-col", {
+				className={cn("app-shell flex w-full flex-col", {
 					"bg-background": !customBackgroundImage,
 				})}
 			>
-				<main className="flex z-20 min-h-[calc(100vh-calc(var(--spacing)*16))] flex-1 flex-col gap-4 p-4 md:p-10 md:pt-8">
+				<main className="flex z-20 min-h-0 flex-1 flex-col gap-4 p-4 md:p-10 md:pt-8">
 					<RefreshToast />
-					<Header />
+					<Header configurationLoading={configurationLoading} />
 					<DashCommand />
 					<LocalErrorBoundary resetKey={pathname} allowReload>
 						<Routes>
 							<Route
 								path="/"
-								element={<Server backendError={initialBackendError} />}
+								element={
+									<Server
+										backendError={initialBackendError}
+										configurationLoading={configurationLoading}
+									/>
+								}
 							/>
-							<Route path="/server/:id" element={<ServerDetail />} />
+							<Route
+								path="/server/:id"
+								element={
+									<ServerDetail configurationLoading={configurationLoading} />
+								}
+							/>
 							<Route path="/error" element={<ErrorPage />} />
 							<Route
 								path="*"

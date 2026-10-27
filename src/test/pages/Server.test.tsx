@@ -102,7 +102,12 @@ function renderServerPage(
 	{
 		backendError = null,
 		withStatusControl = false,
-	}: { backendError?: Error | null; withStatusControl?: boolean } = {},
+		configurationLoading = false,
+	}: {
+		backendError?: Error | null;
+		withStatusControl?: boolean;
+		configurationLoading?: boolean;
+	} = {},
 ) {
 	const defaultWebsocketValue: WebSocketContextType = {
 		lastData: null,
@@ -120,7 +125,10 @@ function renderServerPage(
 					value={{ ...defaultWebsocketValue, ...websocketValue }}
 				>
 					{withStatusControl && <StatusControl />}
-					<Servers backendError={backendError} />
+					<Servers
+						backendError={backendError}
+						configurationLoading={configurationLoading}
+					/>
 				</WebSocketContext.Provider>
 			</StatusProvider>
 		</SortProvider>,
@@ -159,13 +167,38 @@ describe("Servers page", () => {
 		});
 	});
 
-	it("renders websocket loading and processing states", () => {
+	it("keeps cached servers visible during reconnection", () => {
+		renderServerPage({
+			connected: false,
+			lastData: websocketPayload([
+				createServer({ id: 1, name: "cached-server" }),
+			]),
+		});
+		expect(screen.getByText("cached-server")).toBeInTheDocument();
+		expect(screen.queryByRole("status")).not.toBeInTheDocument();
+	});
+
+	it("shows the home skeleton until configuration is initialized even if server data arrived", () => {
+		renderServerPage(
+			{
+				connected: true,
+				lastData: websocketPayload([
+					createServer({ id: 1, name: "waiting-server" }),
+				]),
+			},
+			{ configurationLoading: true },
+		);
+		expect(screen.getByRole("status")).toHaveAttribute("aria-busy", "true");
+		expect(screen.queryByText("waiting-server")).not.toBeInTheDocument();
+	});
+
+	it("keeps the same loading message before and after websocket connects", () => {
 		const { rerender } = renderServerPage({
 			connected: false,
 			lastData: null,
 		});
 
-		expect(screen.getByText("info.websocketConnecting")).toBeInTheDocument();
+		expect(screen.getByText("Loading…")).toBeInTheDocument();
 
 		rerender(
 			<SortProvider>
@@ -186,7 +219,7 @@ describe("Servers page", () => {
 			</SortProvider>,
 		);
 
-		expect(screen.getByText("info.processing")).toBeInTheDocument();
+		expect(screen.getByText("Loading…")).toBeInTheDocument();
 	});
 
 	it("renders a centered backend error instead of a 500 page", async () => {
@@ -205,9 +238,7 @@ describe("Servers page", () => {
 			screen.getByText("error.backendUnavailableDescription"),
 		).toBeInTheDocument();
 		expect(screen.getByText("settings failed")).toBeInTheDocument();
-		expect(
-			screen.queryByText("info.websocketConnecting"),
-		).not.toBeInTheDocument();
+		expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
 	});
 
 	it("shows backend query errors while waiting for websocket data", async () => {
@@ -435,6 +466,62 @@ describe("Servers page", () => {
 				behavior: "auto",
 			});
 		});
+	});
+
+	it("waits for configuration and the rendered list before restoring scroll exactly once", () => {
+		const scrollTo = vi.fn(() => {
+			expect(screen.getByText("scroll-target-server")).toBeInTheDocument();
+			expect(screen.queryByRole("status")).not.toBeInTheDocument();
+		});
+		vi.stubGlobal("scrollTo", scrollTo);
+		vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+			callback(0);
+			return 0;
+		});
+		sessionStorage.setItem("fromMainPage", "true");
+		sessionStorage.setItem("scrollPosition", "1200");
+		const data = websocketPayload([
+			createServer({ id: 1, name: "scroll-target-server" }),
+		]);
+		function Page({
+			loading,
+			payload = data,
+		}: {
+			loading: boolean;
+			payload?: typeof data;
+		}) {
+			return (
+				<SortProvider>
+					<StatusProvider>
+						<WebSocketContext.Provider
+							value={{
+								connected: true,
+								lastData: payload,
+								messageHistory: [],
+								reconnect: vi.fn(),
+								needReconnect: false,
+								setNeedReconnect: vi.fn(),
+							}}
+						>
+							<Servers configurationLoading={loading} />
+						</WebSocketContext.Provider>
+					</StatusProvider>
+				</SortProvider>
+			);
+		}
+		const { rerender } = renderWithProviders(<Page loading />);
+		expect(screen.getByRole("status")).toBeInTheDocument();
+		expect(scrollTo).not.toHaveBeenCalled();
+		rerender(<Page loading={false} />);
+		expect(scrollTo).toHaveBeenCalledExactlyOnceWith({
+			top: 1200,
+			left: 0,
+			behavior: "auto",
+		});
+		rerender(
+			<Page loading={false} payload={{ ...data, now: data.now + 1000 }} />,
+		);
+		expect(scrollTo).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not restore stale scroll positions without a main page origin", () => {
